@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class Activity(models.Model):
@@ -56,6 +57,12 @@ class Subtask(models.Model):
     class Meta:
         db_table = 'subtasks'
         ordering = ['created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(estimated_hours__gt=0),
+                name='check_estimated_hours_positive'
+            )
+        ]
 
     def __str__(self):
         return self.title

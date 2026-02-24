@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.db import transaction
 
 from .models import Activity
-from .serializers import ActivitySerializer
+from .serializers import ActivitySerializer, SubtaskSerializer
 
 
 @api_view(['GET', 'POST'])
@@ -57,3 +57,43 @@ def activity_detail(request, pk):
         'status': 'success',
         'data': serializer.data,
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def subtask_create(request, activity_id):
+    """
+    POST /api/activities/<uuid:activity_id>/subtasks/ — Crea una subtarea para una actividad.
+    """
+    try:
+        activity = Activity.objects.get(pk=activity_id)
+    except Activity.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Actividad no encontrada',
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = SubtaskSerializer(data=request.data)
+    if serializer.is_valid():
+        try:
+            serializer.save(activity=activity)
+            return Response({
+                'status': 'success',
+                'message': 'Subtarea creada exitosamente',
+                'data': serializer.data,
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            # Registrar el error real en los logs del servidor
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al crear subtarea: {str(e)}")
+            
+            return Response({
+                'status': 'error',
+                'message': 'No se pudo guardar la subtarea. Ocurrió un error inesperado en el servidor.',
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        'status': 'error',
+        'message': 'Error de validación',
+        'errors': serializer.errors,
+    }, status=status.HTTP_400_BAD_REQUEST)
