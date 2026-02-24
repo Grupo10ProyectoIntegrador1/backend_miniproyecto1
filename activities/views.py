@@ -1,10 +1,14 @@
+import logging
+
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.db import transaction
+from django.db import transaction, IntegrityError
 
 from .models import Activity
 from .serializers import ActivitySerializer, SubtaskSerializer
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['GET', 'POST'])
@@ -81,12 +85,16 @@ def subtask_create(request, activity_id):
                 'message': 'Subtarea creada exitosamente',
                 'data': serializer.data,
             }, status=status.HTTP_201_CREATED)
+        except IntegrityError as e:
+            logger.error(f"Error de integridad al crear subtarea: {str(e)}")
+            return Response({
+                'status': 'error',
+                'message': 'Los datos enviados violan una restricción de la base de datos. '
+                           'Verifique que los valores proporcionados sean válidos (por ejemplo, '
+                           'estimated_hours debe ser mayor a 0).',
+            }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # Registrar el error real en los logs del servidor
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Error al crear subtarea: {str(e)}")
-            
             return Response({
                 'status': 'error',
                 'message': 'No se pudo guardar la subtarea. Ocurrió un error inesperado en el servidor.',
