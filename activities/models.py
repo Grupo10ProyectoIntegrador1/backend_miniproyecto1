@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class Activity(models.Model):
@@ -59,3 +60,13 @@ class Subtask(models.Model):
 
     def __str__(self):
         return self.title
+
+    def clean(self):
+        """Validaciones de negocio a nivel de modelo."""
+        super().clean()
+        if not self.title or not self.title.strip():
+            raise ValidationError({'title': 'El título de la subtarea es obligatorio.'})
+        if self.estimated_hours is not None and self.estimated_hours <= 0:
+            raise ValidationError(
+                {'estimated_hours': 'Las horas estimadas deben ser mayores a 0.'}
+            )
