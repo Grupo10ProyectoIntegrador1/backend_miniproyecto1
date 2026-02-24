@@ -57,16 +57,12 @@ class Subtask(models.Model):
     class Meta:
         db_table = 'subtasks'
         ordering = ['created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(estimated_hours__gt=0),
+                name='check_estimated_hours_positive'
+            )
+        ]
 
     def __str__(self):
         return self.title
-
-    def clean(self):
-        """Validaciones de negocio a nivel de modelo."""
-        super().clean()
-        if not self.title or not self.title.strip():
-            raise ValidationError({'title': 'El título de la subtarea es obligatorio.'})
-        if self.estimated_hours is not None and self.estimated_hours <= 0:
-            raise ValidationError(
-                {'estimated_hours': 'Las horas estimadas deben ser mayores a 0.'}
-            )

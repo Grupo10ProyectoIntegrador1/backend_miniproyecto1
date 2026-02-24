@@ -82,10 +82,14 @@ def subtask_create(request, activity_id):
                 'data': serializer.data,
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
+            # Registrar el error real en los logs del servidor
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al crear subtarea: {str(e)}")
+            
             return Response({
                 'status': 'error',
-                'message': 'No se pudo guardar la subtarea',
-                'details': str(e),
+                'message': 'No se pudo guardar la subtarea. Ocurrió un error inesperado en el servidor.',
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({

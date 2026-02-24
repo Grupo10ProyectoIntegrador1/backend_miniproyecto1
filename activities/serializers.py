@@ -22,10 +22,8 @@ class SubtaskSerializer(serializers.ModelSerializer):
         },
     )
     target_date = serializers.DateField(
-        required=True,
-        error_messages={
-            'required': 'La fecha objetivo es obligatoria.',
-        },
+        required=False,
+        allow_null=True,
     )
 
     class Meta:
