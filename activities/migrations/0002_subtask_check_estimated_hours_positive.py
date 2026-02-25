@@ -12,6 +12,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddConstraint(
             model_name='subtask',
-            constraint=models.CheckConstraint(condition=models.Q(('estimated_hours__gt', 0)), name='check_estimated_hours_positive'),
+            constraint=models.CheckConstraint(check=models.Q(('estimated_hours__gt', 0)), name='check_estimated_hours_positive'),
         ),
     ]

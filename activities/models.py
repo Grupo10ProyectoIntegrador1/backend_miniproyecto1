@@ -68,7 +68,7 @@ class Subtask(models.Model):
         ordering = ['created_at']
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(estimated_hours__gt=0),
+                check=models.Q(estimated_hours__gt=0),
                 name='check_estimated_hours_positive'
             )
         ]
