@@ -88,10 +88,8 @@ class ActivitySerializer(serializers.ModelSerializer):
     )
 
     user_id = serializers.IntegerField(
-        required=True,
-        error_messages={
-            'required': 'El user_id es obligatorio.',
-        },
+        required=False,
+        default=1,
     )
 
     class Meta:
@@ -102,16 +100,6 @@ class ActivitySerializer(serializers.ModelSerializer):
             'subtasks',
         ]
         read_only_fields = ['id', 'status']
-
-    def validate_user_id(self, value):
-        with connection.cursor() as cursor:
-            cursor.execute('SELECT 1 FROM "user" WHERE user_id = %s LIMIT 1', [value])
-            row = cursor.fetchone()
-        if not row:
-            raise serializers.ValidationError(
-                f'El user_id={value} no existe en la tabla "user" de Supabase.'
-            )
-        return value
 
 
     def create(self, validated_data):
