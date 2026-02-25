@@ -21,20 +21,19 @@ class Activity(models.Model):
         ('presentation', 'Presentación'),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Mapeamos al esquema existente de Supabase: tabla `activity` con PK `activity_id`
+    id = models.BigAutoField(primary_key=True, db_column='activity_id')
     title = models.CharField(max_length=255)
     type = models.CharField(max_length=100, choices=TYPE_CHOICES)
     course = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     due_date = models.DateField()
     weight = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    user_id = models.IntegerField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    user_id = models.BigIntegerField()
 
     class Meta:
-        db_table = 'activities'
-        ordering = ['-created_at']
+        db_table = 'activity'
+        ordering = ['-due_date']
 
     def __str__(self):
         return f"{self.title} ({self.course})"

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import connection
 from .models import Activity, Subtask
 
 
@@ -86,15 +87,19 @@ class ActivitySerializer(serializers.ModelSerializer):
         }
     )
 
+    user_id = serializers.IntegerField(
+        required=False,
+        default=1,
+    )
+
     class Meta:
         model = Activity
         fields = [
             'id', 'title', 'type', 'course', 'status',
             'due_date', 'weight', 'user_id',
             'subtasks',
-            'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'status', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'status']
 
 
     def create(self, validated_data):
