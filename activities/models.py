@@ -29,7 +29,7 @@ class Activity(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     due_date = models.DateField()
     weight = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    user_id = models.IntegerField(null=True, blank=True)
+    user_id = models.BigIntegerField()
 
     class Meta:
         db_table = 'activity'
