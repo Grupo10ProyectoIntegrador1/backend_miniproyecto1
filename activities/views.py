@@ -98,7 +98,7 @@ def subtask_create(request, activity_id):
             'message': 'Actividad no encontrada',
         }, status=status.HTTP_404_NOT_FOUND)
 
-    serializer = SubtaskSerializer(data=request.data)
+    serializer = SubtaskSerializer(data=request.data, context={'activity': activity})
     if serializer.is_valid():
         try:
             serializer.save(activity=activity)
