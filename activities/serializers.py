@@ -32,9 +32,8 @@ class SubtaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'activity', 'title', 'description', 'status',
             'target_date', 'estimated_hours',
-            'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'activity', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'activity']
 
     def validate_estimated_hours(self, value):
         """Las horas estimadas deben ser mayores a 0."""

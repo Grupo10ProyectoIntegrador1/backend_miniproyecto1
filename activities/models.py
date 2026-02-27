@@ -1,4 +1,3 @@
-import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
 
@@ -43,34 +42,28 @@ class Subtask(models.Model):
     """Modelo de subtarea asociada a una actividad evaluativa."""
 
     STATUS_CHOICES = [
-        ('pendiente', 'Pendiente'),
-        ('en_progreso', 'En Progreso'),
-        ('completada', 'Completada'),
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # PK mapeado a subtask_id (bigint) en Supabase
+    id = models.BigAutoField(primary_key=True, db_column='subtask_id')
+    # FK mapeado a activity_id (int8) en Supabase
     activity = models.ForeignKey(
         Activity,
         on_delete=models.CASCADE,
-        related_name='subtasks'
+        related_name='subtasks',
+        db_column='activity_id'
     )
     title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, default='')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendiente')
     target_date = models.DateField(null=True, blank=True)
-    estimated_hours = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    estimated_hours = models.FloatField(null=True, blank=True)
+    description = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
 
     class Meta:
-        db_table = 'subtasks'
-        ordering = ['created_at']
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(estimated_hours__gt=0),
-                name='check_estimated_hours_positive'
-            )
-        ]
+        db_table = 'subtask'
 
     def __str__(self):
         return self.title
