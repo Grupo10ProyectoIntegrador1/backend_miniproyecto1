@@ -2,11 +2,14 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 
 from .models import Activity
 from .serializers import ActivitySerializer, SubtaskSerializer
 
 
+@extend_schema(methods=['GET'], responses=ActivitySerializer(many=True))
+@extend_schema(methods=['POST'], request=ActivitySerializer, responses=ActivitySerializer)
 @api_view(['GET', 'POST'])
 def activity_list_create(request):
     """
@@ -39,6 +42,9 @@ def activity_list_create(request):
     }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(methods=['GET'], responses=ActivitySerializer)
+@extend_schema(methods=['PUT', 'PATCH'], request=ActivitySerializer, responses=ActivitySerializer)
+@extend_schema(methods=['DELETE'], responses=None)
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def activity_detail(request, pk):
     """
@@ -85,6 +91,7 @@ def activity_detail(request, pk):
         }, status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema(methods=['POST'], request=SubtaskSerializer, responses=SubtaskSerializer)
 @api_view(['POST'])
 def subtask_create(request, activity_id):
     """
@@ -124,6 +131,9 @@ def subtask_create(request, activity_id):
         'errors': serializer.errors,
     }, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(methods=['GET'], responses=SubtaskSerializer)
+@extend_schema(methods=['PUT', 'PATCH'], request=SubtaskSerializer, responses=SubtaskSerializer)
+@extend_schema(methods=['DELETE'], responses=None)
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def subtask_detail(request, pk):
     """
