@@ -1,5 +1,5 @@
+from datetime import date
 from rest_framework import serializers
-from django.db import connection
 from .models import Activity, Subtask
 
 
@@ -14,9 +14,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
             'blank': 'El título de la subtarea no puede estar vacío.',
         },
     )
-    estimated_hours = serializers.DecimalField(
-        max_digits=5,
-        decimal_places=2,
+    estimated_hours = serializers.FloatField(
         required=True,
         error_messages={
             'required': 'Las horas estimadas son obligatorias.',
@@ -32,27 +30,52 @@ class SubtaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'activity', 'title', 'description', 'status',
             'target_date', 'estimated_hours',
-            'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'activity', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'activity']
 
     def validate_estimated_hours(self, value):
-        """Las horas estimadas deben ser mayores a 0."""
+        """Las horas estimadas deben ser > 0 y <= 16."""
         if value <= 0:
             raise serializers.ValidationError(
                 'Las horas estimadas deben ser mayores a 0.'
             )
+        if value > 16:
+            raise serializers.ValidationError(
+                'Las horas estimadas no pueden superar 16 horas.'
+            )
         return value
 
+    def validate_target_date(self, value):
+        """La fecha de la subtarea debe ser >= hoy."""
+        if value and value < date.today():
+            raise serializers.ValidationError(
+                'La fecha de la subtarea no puede ser anterior a hoy.'
+            )
+        return value
+
+    def validate(self, data):
+        """
+        La target_date de la subtarea no puede ser mayor
+        que la due_date de la actividad asociada.
+        """
+        target_date = data.get('target_date')
+        # La actividad se inyecta en el contexto desde la vista
+        activity = self.context.get('activity')
+        if target_date and activity and target_date > activity.due_date:
+            raise serializers.ValidationError({
+                'target_date': (
+                    f'La fecha de la subtarea ({target_date}) no puede ser '
+                    f'posterior a la fecha límite de la actividad ({activity.due_date}).'
+                )
+            })
+        return data
 
 
 class ActivitySerializer(serializers.ModelSerializer):
     """
     Serializer para actividades evaluativas.
-    Permite crear una actividad con o sin subtareas anidadas.
-    Serializer para actividades evaluativas.
     Campos obligatorios: title, type, due_date.
-    Campos opcionales: course, weight, user_id(por el momento), subtasks.
+    Campos opcionales: course, weight, user_id, subtasks.
     Status por defecto: pending.
     """
     subtasks = SubtaskSerializer(many=True, required=False)
@@ -101,9 +124,16 @@ class ActivitySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'status']
 
+    def validate_due_date(self, value):
+        """La fecha límite de la actividad debe ser >= hoy."""
+        if value < date.today():
+            raise serializers.ValidationError(
+                'La fecha límite no puede ser anterior a hoy.'
+            )
+        return value
 
     def create(self, validated_data):
-        """Crea la actividad junto con sus subtare si se incluyen."""
+        """Crea la actividad junto con sus subtareas si se incluyen."""
         subtasks_data = validated_data.pop('subtasks', [])
         activity = Activity.objects.create(**validated_data)
         for subtask_data in subtasks_data:
