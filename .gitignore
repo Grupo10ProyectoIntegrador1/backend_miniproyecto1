@@ -1,3 +1,8 @@
 # Security
 .env
 venv
+__pycache__/
+*.pyc
+*.pyo
+*.sqlite3
+myenv/
