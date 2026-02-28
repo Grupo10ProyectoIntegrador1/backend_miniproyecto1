@@ -42,9 +42,10 @@ class Subtask(models.Model):
     """Modelo de subtarea asociada a una actividad evaluativa."""
 
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('in_progress', 'In Progress'),
-        ('done', 'Done'),
+        ('pending', 'Pendiente'),
+        ('done', 'Completada'),
+        ('postponed', 'Postergada'),
+        ('overdue', 'Vencida'),
     ]
 
     # PK mapeado a subtask_id (bigint) en Supabase
