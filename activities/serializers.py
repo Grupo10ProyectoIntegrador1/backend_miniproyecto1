@@ -47,7 +47,17 @@ class SubtaskSerializer(serializers.ModelSerializer):
 
     def validate_target_date(self, value):
         """La fecha de la subtarea debe ser >= hoy."""
-        if value and value < date.today():
+        from django.utils import timezone
+        
+        if not value:
+            return value
+
+        # Permite la misma fecha si no se está modificando
+        if self.instance and self.instance.target_date == value:
+            return value
+
+        today = timezone.localdate()
+        if value < today:
             raise serializers.ValidationError(
                 'La fecha de la subtarea no puede ser anterior a hoy.'
             )
@@ -59,8 +69,16 @@ class SubtaskSerializer(serializers.ModelSerializer):
         que la due_date de la actividad asociada.
         """
         target_date = data.get('target_date')
-        # La actividad se inyecta en el contexto desde la vista
+        
+        # En creación viene en context, en edición viene en la instancia
         activity = self.context.get('activity')
+        if not activity and self.instance:
+            activity = self.instance.activity
+            
+        # Si en el PATCH no mandan target_date, la sacamos de la instancia
+        if target_date is None and self.instance:
+            target_date = self.instance.target_date
+
         if target_date and activity and target_date > activity.due_date:
             raise serializers.ValidationError({
                 'target_date': (
@@ -110,10 +128,26 @@ class ActivitySerializer(serializers.ModelSerializer):
         }
     )
 
+    status = serializers.ChoiceField(
+        choices=['pending', 'done', 'postponed', 'overdue'],
+        error_messages={
+            'invalid_choice': 'Estado inválido.',
+        },
+        required=False,
+    )
+
     user_id = serializers.IntegerField(
         required=False,
         default=1,
     )
+
+    def validate_weight(self, value):
+        if value is not None:
+            if value < 0 or value > 100:
+                raise serializers.ValidationError(
+                    'El peso debe estar entre 0 y 100.'
+                )
+        return value
 
     class Meta:
         model = Activity
@@ -122,11 +156,18 @@ class ActivitySerializer(serializers.ModelSerializer):
             'due_date', 'weight', 'user_id',
             'subtasks',
         ]
-        read_only_fields = ['id', 'status']
+        read_only_fields = ['id']
 
     def validate_due_date(self, value):
         """La fecha límite de la actividad debe ser >= hoy."""
-        if value < date.today():
+        from django.utils import timezone
+        
+        # Permitir la fecha actual de la instancia en actualizaciones
+        if self.instance and self.instance.due_date == value:
+            return value
+            
+        today = timezone.localdate()
+        if value < today:
             raise serializers.ValidationError(
                 'La fecha límite no puede ser anterior a hoy.'
             )
