@@ -44,7 +44,7 @@ class Subtask(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('in_progress', 'In Progress'),
-        ('done', 'Done'),
+        ('completed', 'Completed'),
     ]
 
     # PK mapeado a subtask_id (bigint) en Supabase
