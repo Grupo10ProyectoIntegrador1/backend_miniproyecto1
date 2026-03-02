@@ -17,7 +17,9 @@ def activity_list_create(request):
     POST /api/activities/ — Crea una actividad con subtareas anidadas.
     """
     if request.method == 'GET':
-        activities = Activity.objects.prefetch_related('subtasks').all()
+        activities = Activity.objects.prefetch_related('subtasks').filter(
+            user_id=request.user.user_id
+        )
         serializer = ActivitySerializer(activities, many=True)
         return Response({
             'status': 'success',
@@ -28,7 +30,7 @@ def activity_list_create(request):
     serializer = ActivitySerializer(data=request.data)
     if serializer.is_valid():
         with transaction.atomic():
-            activity = serializer.save()
+            activity = serializer.save(user_id=request.user.user_id)
         return Response({
             'status': 'success',
             'message': 'Actividad creada exitosamente',
@@ -54,7 +56,10 @@ def activity_detail(request, pk):
     DELETE /api/activities/<int:pk>/ — Elimina una actividad.
     """
     try:
-        activity = Activity.objects.prefetch_related('subtasks').get(pk=pk)
+        activity = Activity.objects.prefetch_related('subtasks').get(
+            pk=pk,
+            user_id=request.user.user_id
+            )
     except Activity.DoesNotExist:
         return Response({
             'status': 'error',
@@ -98,7 +103,10 @@ def subtask_create(request, activity_id):
     POST /api/activities/<uuid:activity_id>/subtasks/ — Crea una subtarea para una actividad.
     """
     try:
-        activity = Activity.objects.get(pk=activity_id)
+        activity = Activity.objects.get(
+            pk=activity_id,
+            user_id=request.user.user_id
+        )
     except Activity.DoesNotExist:
         return Response({
             'status': 'error',
@@ -145,7 +153,10 @@ def subtask_detail(request, pk):
     from .models import Subtask
 
     try:
-        subtask = Subtask.objects.get(pk=pk)
+        subtask = Subtask.objects.get(
+            pk=pk,
+            activity__user_id=request.user.user_id
+        )                             
     except Subtask.DoesNotExist:
         return Response({
             'status': 'error',
