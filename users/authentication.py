@@ -61,6 +61,6 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         try:
             user = User.objects.get(uuid_user=uuid_user)
         except User.DoesNotExist:
-            raise AuthenticationFailed('Usuario no encontrado.')
+            return None
         
         return (user, token)
