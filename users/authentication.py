@@ -41,6 +41,7 @@ class SupabaseJWTAuthentication(BaseAuthentication):
                 signing_key.key,
                 algorithms=['ES256'],
                 audience='authenticated',
+                options={'verify_iat': False}
             )
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Token expirado.')

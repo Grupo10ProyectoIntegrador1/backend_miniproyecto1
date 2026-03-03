@@ -42,6 +42,7 @@ def register(request):
             signing_key.key,
             algorithms=['ES256'],
             audience='authenticated',
+            options={'verify_iat': False}
         )
     except Exception as e:
         return Response({
