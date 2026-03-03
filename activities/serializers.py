@@ -117,12 +117,8 @@ class ActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Activity
-        fields = [
-            'id', 'title', 'type', 'course', 'status',
-            'due_date', 'weight', 'user_id',
-            'subtasks',
-        ]
-        read_only_fields = ['id', 'status']
+        fields = '__all__'
+        read_only_fields = ['id', 'status', 'user_id']
 
     def validate_due_date(self, value):
         """La fecha límite de la actividad debe ser >= hoy."""

@@ -55,6 +55,16 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Backend para gestión de actividades y subtareas',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'SECURITY': [{'BearerAuth': []}],
+    'COMPONENTS': {
+        'securitySchemes': {
+            'BearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
+        }
+    }
 }
 
 MIDDLEWARE = [
