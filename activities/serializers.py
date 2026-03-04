@@ -110,10 +110,6 @@ class ActivitySerializer(serializers.ModelSerializer):
         }
     )
 
-    user_id = serializers.IntegerField(
-        required=False,
-        default=1,
-    )
 
     class Meta:
         model = Activity
