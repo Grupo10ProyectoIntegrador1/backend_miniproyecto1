@@ -191,3 +191,5 @@ def subtask_detail(request, pk):
             'status': 'success',
             'message': 'Subtarea eliminada exitosamente',
         }, status=status.HTTP_204_NO_CONTENT)
+
+
