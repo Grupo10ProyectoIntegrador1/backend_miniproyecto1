@@ -74,12 +74,10 @@ def activity_detail(request, pk):
         }, status=status.HTTP_200_OK)
 
     elif request.method in ['PUT', 'PATCH']:
-        # pasar actividad en contexto para validar target_date
-        serializer = SubtaskSerializer(
-            subtask, 
-            data=request.data, 
+        serializer = ActivitySerializer(
+            activity,
+            data=request.data,
             partial=(request.method == 'PATCH'),
-            context={'activity': subtask.activity}  # ← agrega esto
         )
         if serializer.is_valid():
             serializer.save()
