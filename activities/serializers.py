@@ -154,11 +154,10 @@ class ActivityBriefSerializer(serializers.ModelSerializer):
 class TodaySubtaskSerializer(serializers.ModelSerializer):
     """Subtarea enriqueceda con su actividad padre + fecha efectiva """
     parent_activity = ActivityBriefSerializer(source='activity', read_only=True)
-    effective_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Subtask
         fields = ['id', 'title', 'description', 'status',
                   'target_date', 'estimated_hours',
-                  'parent_activity', 'effective_date']
+                  'parent_activity']
         
