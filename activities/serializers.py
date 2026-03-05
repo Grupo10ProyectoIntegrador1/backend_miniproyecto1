@@ -143,3 +143,22 @@ class ActivitySerializer(serializers.ModelSerializer):
         for subtask_data in subtasks_data:
             Subtask.objects.create(activity=activity, **subtask_data)
         return activity
+
+
+class ActivityBriefSerializer(serializers.ModelSerializer):
+    """ Info minima de la actividad padre"""
+    class Meta:
+        model = Activity
+        fields = ['id', 'title', 'type', 'course', 'weight', 'due_date']
+
+class TodaySubtaskSerializer(serializers.ModelSerializer):
+    """Subtarea enriqueceda con su actividad padre + fecha efectiva """
+    parent_activity = ActivityBriefSerializer(source='activity', read_only=True)
+    effective_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subtask
+        fields = ['id', 'title', 'description', 'status',
+                  'target_date', 'estimated_hours',
+                  'parent_activity', 'effective_date']
+        
