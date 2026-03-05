@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.db import transaction
 from drf_spectacular.utils import extend_schema
 
-from .models import Activity
+from .models import Activity, Subtask
 from .serializers import ActivitySerializer, SubtaskSerializer
 
 
@@ -74,7 +74,13 @@ def activity_detail(request, pk):
         }, status=status.HTTP_200_OK)
 
     elif request.method in ['PUT', 'PATCH']:
-        serializer = ActivitySerializer(activity, data=request.data, partial=(request.method == 'PATCH'))
+        # pasar actividad en contexto para validar target_date
+        serializer = SubtaskSerializer(
+            subtask, 
+            data=request.data, 
+            partial=(request.method == 'PATCH'),
+            context={'activity': subtask.activity}  # ← agrega esto
+        )
         if serializer.is_valid():
             serializer.save()
             return Response({
@@ -191,3 +197,5 @@ def subtask_detail(request, pk):
             'status': 'success',
             'message': 'Subtarea eliminada exitosamente',
         }, status=status.HTTP_204_NO_CONTENT)
+
+

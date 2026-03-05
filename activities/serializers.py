@@ -61,6 +61,8 @@ class SubtaskSerializer(serializers.ModelSerializer):
         target_date = data.get('target_date')
         # La actividad se inyecta en el contexto desde la vista
         activity = self.context.get('activity')
+        if not activity and self.instance:
+            activity = self.instance.activity
         if target_date and activity and target_date > activity.due_date:
             raise serializers.ValidationError({
                 'target_date': (
@@ -114,7 +116,8 @@ class ActivitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Activity
         fields = '__all__'
-        read_only_fields = ['id', 'status', 'user_id']
+        # status ya no es read_only, se puede editar
+        read_only_fields = ['id', 'user_id']
 
     def validate_due_date(self, value):
         """La fecha límite de la actividad debe ser >= hoy."""
@@ -122,6 +125,15 @@ class ActivitySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 'La fecha límite no puede ser anterior a hoy.'
             )
+        return value
+
+    def validate_weight(self, value):
+        """El peso debe estar entre 0 y 100."""
+        if value is not None:
+            if value < 0:
+                raise serializers.ValidationError('El peso no puede ser negativo.')
+            if value > 100:
+                raise serializers.ValidationError('El peso no puede ser mayor a 100.')
         return value
 
     def create(self, validated_data):
