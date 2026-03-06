@@ -2,10 +2,12 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.db import transaction
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
+from datetime import date, timedelta
 
-from .models import Activity
-from .serializers import ActivitySerializer, SubtaskSerializer
+from .models import Activity, Subtask
+from .serializers import ActivitySerializer, SubtaskSerializer, TodaySubtaskSerializer
 
 
 @extend_schema(methods=['GET'], responses=ActivitySerializer(many=True))
@@ -17,7 +19,9 @@ def activity_list_create(request):
     POST /api/activities/ — Crea una actividad con subtareas anidadas.
     """
     if request.method == 'GET':
-        activities = Activity.objects.prefetch_related('subtasks').all()
+        activities = Activity.objects.prefetch_related('subtasks').filter(
+            user_id=request.user.user_id
+        )
         serializer = ActivitySerializer(activities, many=True)
         return Response({
             'status': 'success',
@@ -28,7 +32,7 @@ def activity_list_create(request):
     serializer = ActivitySerializer(data=request.data)
     if serializer.is_valid():
         with transaction.atomic():
-            activity = serializer.save()
+            activity = serializer.save(user_id=request.user.user_id)
         return Response({
             'status': 'success',
             'message': 'Actividad creada exitosamente',
@@ -54,7 +58,10 @@ def activity_detail(request, pk):
     DELETE /api/activities/<int:pk>/ — Elimina una actividad.
     """
     try:
-        activity = Activity.objects.prefetch_related('subtasks').get(pk=pk)
+        activity = Activity.objects.prefetch_related('subtasks').get(
+            pk=pk,
+            user_id=request.user.user_id
+            )
     except Activity.DoesNotExist:
         return Response({
             'status': 'error',
@@ -69,7 +76,11 @@ def activity_detail(request, pk):
         }, status=status.HTTP_200_OK)
 
     elif request.method in ['PUT', 'PATCH']:
-        serializer = ActivitySerializer(activity, data=request.data, partial=(request.method == 'PATCH'))
+        serializer = ActivitySerializer(
+            activity,
+            data=request.data,
+            partial=(request.method == 'PATCH'),
+        )
         if serializer.is_valid():
             serializer.save()
             return Response({
@@ -98,7 +109,10 @@ def subtask_create(request, activity_id):
     POST /api/activities/<uuid:activity_id>/subtasks/ — Crea una subtarea para una actividad.
     """
     try:
-        activity = Activity.objects.get(pk=activity_id)
+        activity = Activity.objects.get(
+            pk=activity_id,
+            user_id=request.user.user_id
+        )
     except Activity.DoesNotExist:
         return Response({
             'status': 'error',
@@ -145,7 +159,10 @@ def subtask_detail(request, pk):
     from .models import Subtask
 
     try:
-        subtask = Subtask.objects.get(pk=pk)
+        subtask = Subtask.objects.get(
+            pk=pk,
+            activity__user_id=request.user.user_id
+        )                             
     except Subtask.DoesNotExist:
         return Response({
             'status': 'error',
@@ -180,3 +197,122 @@ def subtask_detail(request, pk):
             'status': 'success',
             'message': 'Subtarea eliminada exitosamente',
         }, status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(
+    methods=['GET'],
+    parameters=[
+        OpenApiParameter(
+            name='course',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Filtrar por nombre de curso',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='status',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Filtrar por estado: pending, done, postponed, overdue',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='days',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='Limitar próximas a los siguientes N días',
+            required=False,
+        ),
+    ],
+)
+@api_view(['GET'])
+def today_subtasks(request):
+    """
+    GET /api/subtasks/today/ — Vista "Hoy": subtareas agrupadas por prioridad.
+
+    Agrupación:
+      - overdue:  target_date < hoy  (más antigua primero)
+      - today:    target_date == hoy
+      - upcoming: target_date > hoy  (más cercana primero)
+
+    Desempate en todos los grupos: menor estimated_hours primero.
+
+    Query params opcionales:
+      - course: filtra por curso de la actividad padre
+      - status: filtra por estado de la subtarea (pending, done, postponed, overdue)
+      - days:   limita "upcoming" a los próximos N días
+    """
+    today = date.today()
+    user_id = request.user.user_id
+
+    # Lazy update: marcar como vencidas las subtareas y actividades pasadas
+    Subtask.objects.filter(
+        activity__user_id=user_id,
+        target_date__lt=today,
+        status='pending',
+    ).update(status='overdue')
+
+    Activity.objects.filter(
+        user_id=user_id,
+        due_date__lt=today,
+        status='pending',
+    ).update(status='overdue')
+
+    # Base queryset (ya viene todo actualizado)
+    qs = Subtask.objects.select_related('activity').filter(
+        activity__user_id=user_id,
+    )
+
+    # --- Filtros opcionales ---
+    course = request.query_params.get('course')
+    if course:
+        qs = qs.filter(activity__course=course)
+
+    status_filter = request.query_params.get('status')
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    else:
+        # Por defecto excluir completadas
+        qs = qs.exclude(status='done')
+
+    # --- Agrupación por fecha ---
+    overdue = qs.filter(
+        target_date__lt=today
+    ).order_by('target_date', 'estimated_hours')
+
+    today_tasks = qs.filter(
+        target_date=today
+    ).order_by('estimated_hours')
+
+    upcoming = qs.filter(
+        target_date__gt=today
+    ).order_by('target_date', 'estimated_hours')
+
+    # Si se pasa ?days=N, limitar upcoming
+    days = request.query_params.get('days')
+    if days is not None:
+        try:
+            days = int(days)
+            if days < 0:
+                return Response({
+                    'status': 'error',
+                    'message': 'El parámetro "days" debe ser >= 0.',
+                }, status=status.HTTP_400_BAD_REQUEST)
+            limit_date = today + timedelta(days=days)
+            upcoming = upcoming.filter(target_date__lte=limit_date)
+        except ValueError:
+            return Response({
+                'status': 'error',
+                'message': 'El parámetro "days" debe ser un número entero.',
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        'status': 'success',
+        'data': {
+            'overdue': TodaySubtaskSerializer(overdue, many=True).data,
+            'today': TodaySubtaskSerializer(today_tasks, many=True).data,
+            'upcoming': TodaySubtaskSerializer(upcoming, many=True).data,
+        },
+    }, status=status.HTTP_200_OK)
+
+

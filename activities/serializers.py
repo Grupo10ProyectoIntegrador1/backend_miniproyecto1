@@ -61,6 +61,8 @@ class SubtaskSerializer(serializers.ModelSerializer):
         target_date = data.get('target_date')
         # La actividad se inyecta en el contexto desde la vista
         activity = self.context.get('activity')
+        if not activity and self.instance:
+            activity = self.instance.activity
         if target_date and activity and target_date > activity.due_date:
             raise serializers.ValidationError({
                 'target_date': (
@@ -110,19 +112,12 @@ class ActivitySerializer(serializers.ModelSerializer):
         }
     )
 
-    user_id = serializers.IntegerField(
-        required=False,
-        default=1,
-    )
 
     class Meta:
         model = Activity
-        fields = [
-            'id', 'title', 'type', 'course', 'status',
-            'due_date', 'weight', 'user_id',
-            'subtasks',
-        ]
-        read_only_fields = ['id', 'status']
+        fields = '__all__'
+        # status ya no es read_only, se puede editar
+        read_only_fields = ['id', 'user_id']
 
     def validate_due_date(self, value):
         """La fecha límite de la actividad debe ser >= hoy."""
@@ -132,6 +127,15 @@ class ActivitySerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_weight(self, value):
+        """El peso debe estar entre 0 y 100."""
+        if value is not None:
+            if value < 0:
+                raise serializers.ValidationError('El peso no puede ser negativo.')
+            if value > 100:
+                raise serializers.ValidationError('El peso no puede ser mayor a 100.')
+        return value
+
     def create(self, validated_data):
         """Crea la actividad junto con sus subtareas si se incluyen."""
         subtasks_data = validated_data.pop('subtasks', [])
@@ -139,3 +143,21 @@ class ActivitySerializer(serializers.ModelSerializer):
         for subtask_data in subtasks_data:
             Subtask.objects.create(activity=activity, **subtask_data)
         return activity
+
+
+class ActivityBriefSerializer(serializers.ModelSerializer):
+    """ Info minima de la actividad padre"""
+    class Meta:
+        model = Activity
+        fields = ['id', 'title', 'type', 'course', 'weight', 'due_date']
+
+class TodaySubtaskSerializer(serializers.ModelSerializer):
+    """Subtarea enriqueceda con su actividad padre + fecha efectiva """
+    parent_activity = ActivityBriefSerializer(source='activity', read_only=True)
+
+    class Meta:
+        model = Subtask
+        fields = ['id', 'title', 'description', 'status',
+                  'target_date', 'estimated_hours',
+                  'parent_activity']
+        
