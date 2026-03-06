@@ -2,7 +2,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.db import transaction
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 from datetime import date, timedelta
 
 from .models import Activity, Subtask
@@ -201,27 +202,27 @@ def subtask_detail(request, pk):
 @extend_schema(
     methods=['GET'],
     parameters=[
-        {
-            'name': 'course',
-            'in': 'query',
-            'description': 'Filtrar por nombre de curso',
-            'required': False,
-            'schema': {'type': 'string'},
-        },
-        {
-            'name': 'status',
-            'in': 'query',
-            'description': 'Filtrar por estado: pending, done, postponed, overdue',
-            'required': False,
-            'schema': {'type': 'string'},
-        },
-        {
-            'name': 'days',
-            'in': 'query',
-            'description': 'Limitar próximas a los siguientes N días',
-            'required': False,
-            'schema': {'type': 'integer'},
-        },
+        OpenApiParameter(
+            name='course',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Filtrar por nombre de curso',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='status',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Filtrar por estado: pending, done, postponed, overdue',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='days',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='Limitar próximas a los siguientes N días',
+            required=False,
+        ),
     ],
 )
 @api_view(['GET'])
