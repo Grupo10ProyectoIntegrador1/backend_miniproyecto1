@@ -241,12 +241,23 @@ def today_subtasks(request):
       - status: filtra por estado de la subtarea (pending, done, postponed, overdue)
       - days:   limita "upcoming" a los próximos N días
     """
-    
-
     today = date.today()
     user_id = request.user.user_id
 
-    # Base queryset subtareas del usuario, con su actividad precargada
+    # Lazy update: marcar como vencidas las subtareas y actividades pasadas
+    Subtask.objects.filter(
+        activity__user_id=user_id,
+        target_date__lt=today,
+        status='pending',
+    ).update(status='overdue')
+
+    Activity.objects.filter(
+        user_id=user_id,
+        due_date__lt=today,
+        status='pending',
+    ).update(status='overdue')
+
+    # Base queryset (ya viene todo actualizado)
     qs = Subtask.objects.select_related('activity').filter(
         activity__user_id=user_id,
     )
