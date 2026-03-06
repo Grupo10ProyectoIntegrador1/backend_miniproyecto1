@@ -3,9 +3,10 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.db import transaction
 from drf_spectacular.utils import extend_schema
+from datetime import date, timedelta
 
 from .models import Activity, Subtask
-from .serializers import ActivitySerializer, SubtaskSerializer
+from .serializers import ActivitySerializer, SubtaskSerializer, TodaySubtaskSerializer
 
 
 @extend_schema(methods=['GET'], responses=ActivitySerializer(many=True))
@@ -74,12 +75,10 @@ def activity_detail(request, pk):
         }, status=status.HTTP_200_OK)
 
     elif request.method in ['PUT', 'PATCH']:
-        # pasar actividad en contexto para validar target_date
-        serializer = SubtaskSerializer(
-            subtask, 
-            data=request.data, 
+        serializer = ActivitySerializer(
+            activity,
+            data=request.data,
             partial=(request.method == 'PATCH'),
-            context={'activity': subtask.activity}  # ← agrega esto
         )
         if serializer.is_valid():
             serializer.save()
@@ -197,5 +196,122 @@ def subtask_detail(request, pk):
             'status': 'success',
             'message': 'Subtarea eliminada exitosamente',
         }, status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(
+    methods=['GET'],
+    parameters=[
+        {
+            'name': 'course',
+            'in': 'query',
+            'description': 'Filtrar por nombre de curso',
+            'required': False,
+            'schema': {'type': 'string'},
+        },
+        {
+            'name': 'status',
+            'in': 'query',
+            'description': 'Filtrar por estado: pending, done, postponed, overdue',
+            'required': False,
+            'schema': {'type': 'string'},
+        },
+        {
+            'name': 'days',
+            'in': 'query',
+            'description': 'Limitar próximas a los siguientes N días',
+            'required': False,
+            'schema': {'type': 'integer'},
+        },
+    ],
+)
+@api_view(['GET'])
+def today_subtasks(request):
+    """
+    GET /api/subtasks/today/ — Vista "Hoy": subtareas agrupadas por prioridad.
+
+    Agrupación:
+      - overdue:  target_date < hoy  (más antigua primero)
+      - today:    target_date == hoy
+      - upcoming: target_date > hoy  (más cercana primero)
+
+    Desempate en todos los grupos: menor estimated_hours primero.
+
+    Query params opcionales:
+      - course: filtra por curso de la actividad padre
+      - status: filtra por estado de la subtarea (pending, done, postponed, overdue)
+      - days:   limita "upcoming" a los próximos N días
+    """
+    today = date.today()
+    user_id = request.user.user_id
+
+    # Lazy update: marcar como vencidas las subtareas y actividades pasadas
+    Subtask.objects.filter(
+        activity__user_id=user_id,
+        target_date__lt=today,
+        status='pending',
+    ).update(status='overdue')
+
+    Activity.objects.filter(
+        user_id=user_id,
+        due_date__lt=today,
+        status='pending',
+    ).update(status='overdue')
+
+    # Base queryset (ya viene todo actualizado)
+    qs = Subtask.objects.select_related('activity').filter(
+        activity__user_id=user_id,
+    )
+
+    # --- Filtros opcionales ---
+    course = request.query_params.get('course')
+    if course:
+        qs = qs.filter(activity__course=course)
+
+    status_filter = request.query_params.get('status')
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    else:
+        # Por defecto excluir completadas
+        qs = qs.exclude(status='done')
+
+    # --- Agrupación por fecha ---
+    overdue = qs.filter(
+        target_date__lt=today
+    ).order_by('target_date', 'estimated_hours')
+
+    today_tasks = qs.filter(
+        target_date=today
+    ).order_by('estimated_hours')
+
+    upcoming = qs.filter(
+        target_date__gt=today
+    ).order_by('target_date', 'estimated_hours')
+
+    # Si se pasa ?days=N, limitar upcoming
+    days = request.query_params.get('days')
+    if days is not None:
+        try:
+            days = int(days)
+            if days < 0:
+                return Response({
+                    'status': 'error',
+                    'message': 'El parámetro "days" debe ser >= 0.',
+                }, status=status.HTTP_400_BAD_REQUEST)
+            limit_date = today + timedelta(days=days)
+            upcoming = upcoming.filter(target_date__lte=limit_date)
+        except ValueError:
+            return Response({
+                'status': 'error',
+                'message': 'El parámetro "days" debe ser un número entero.',
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        'status': 'success',
+        'data': {
+            'overdue': TodaySubtaskSerializer(overdue, many=True).data,
+            'today': TodaySubtaskSerializer(today_tasks, many=True).data,
+            'upcoming': TodaySubtaskSerializer(upcoming, many=True).data,
+        },
+    }, status=status.HTTP_200_OK)
 
 
