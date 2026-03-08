@@ -1,10 +1,24 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Activity, Subtask
+from rest_framework.exceptions import APIException
+from rest_framework import status
+from django.db.models import Sum
 
+from .models import Activity, Subtask
+from users.models import DailyCapacity
+
+class OverloadConflictException(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = 'Conflicto de sobrecarga diaria.'
+    default_code = 'overload_conflict'
+
+    def __init__(self, detail=None, code=None, **kwargs):
+        super().__init__(detail, code)
+        # Permite retornar el payload exacto requerido (planned_hours, limit_hours, exceeds_by)
+        self.detail = detail
 
 class SubtaskSerializer(serializers.ModelSerializer):
-    """Serializer para subtareas con validaciones US-02."""
+    """Serializer para subtareas con validaciones US-02 y US-12 (overload)."""
 
     title = serializers.CharField(
         required=True,
@@ -70,6 +84,48 @@ class SubtaskSerializer(serializers.ModelSerializer):
                     f'posterior a la fecha límite de la actividad ({activity.due_date}).'
                 )
             })
+
+        # --- US-12 Detección de sobrecarga diaria ---
+        if target_date and activity:
+            user_id = activity.user_id
+            
+            # 1. Obtener límite diario (fallback 6h si no existe)
+            try:
+                capacity_obj = DailyCapacity.objects.get(user__user_id=user_id)
+                limit_hours = float(capacity_obj.daily_limit_hours)
+            except DailyCapacity.DoesNotExist:
+                limit_hours = 6.0
+                
+            # 2. Calcular horas planificadas para ese día (excluyendo 'done')
+            # Si estamos actualizando (self.instance), excluir la propia subtarea
+            # para no sumar sus horas antiguas que ya estaban planeadas.
+            qs = Subtask.objects.filter(
+                activity__user_id=user_id,
+                target_date=target_date
+            ).exclude(status='done')
+            
+            if self.instance:
+                qs = qs.exclude(id=self.instance.id)
+                
+            planned_hours = qs.aggregate(
+                total=Sum('estimated_hours')
+            )['total'] or 0.0
+            
+            # 3. Validar si excede (planned + nueva estimación)
+            # Priorizamos la estimación nueva en request, o la que ya tenía la subtarea
+            new_estimated = data.get('estimated_hours', getattr(self.instance, 'estimated_hours', 0.0))
+            total_after_save = planned_hours + new_estimated
+            
+            if total_after_save > limit_hours:
+                exceeds_by = total_after_save - limit_hours
+                raise OverloadConflictException({
+                    'status': 'error',
+                    'message': f'Quedarías con {total_after_save:g}h planificadas (límite {limit_hours:g}h)',
+                    'planned_hours': planned_hours,
+                    'limit_hours': limit_hours,
+                    'exceeds_by': exceeds_by
+                })
+
         return data
 
 
