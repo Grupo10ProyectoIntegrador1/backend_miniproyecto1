@@ -72,7 +72,9 @@ class SubtaskSerializer(serializers.ModelSerializer):
         La target_date de la subtarea no puede ser mayor
         que la due_date de la actividad asociada.
         """
-        target_date = data.get('target_date')
+        target_date = data.get('target_date', getattr(self.instance, 'target_date', None))
+        status_val = data.get('status', getattr(self.instance, 'status', 'pending'))
+
         # La actividad se inyecta en el contexto desde la vista
         activity = self.context.get('activity')
         if not activity and self.instance:
@@ -114,6 +116,11 @@ class SubtaskSerializer(serializers.ModelSerializer):
             # 3. Validar si excede (planned + nueva estimación)
             # Priorizamos la estimación nueva en request, o la que ya tenía la subtarea
             new_estimated = data.get('estimated_hours', getattr(self.instance, 'estimated_hours', 0.0))
+            
+            # Si el nuevo estado es 'done', esa tarea deja de contar para la sobrecarga
+            if status_val == 'done':
+                new_estimated = 0.0
+                
             total_after_save = planned_hours + new_estimated
             
             if total_after_save > limit_hours:
