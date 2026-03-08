@@ -180,9 +180,34 @@ def subtask_detail(request, pk):
         serializer = SubtaskSerializer(subtask, data=request.data, partial=(request.method == 'PATCH'))
         if serializer.is_valid():
             serializer.save()
+            
+            # --- US-13: Recálculo de las horas bajo el nuevo plan para mandarlo en la respuesta ---
+            from django.db.models import Sum
+            from users.models import DailyCapacity
+            
+            user_id = subtask.activity.user_id
+            target_date = subtask.target_date
+            
+            try:
+                limit_hours = float(DailyCapacity.objects.get(user__user_id=user_id).daily_limit_hours)
+            except DailyCapacity.DoesNotExist:
+                limit_hours = 6.0
+                
+            planned_hours = 0.0
+            if target_date:
+                planned_hours = Subtask.objects.filter(
+                    activity__user_id=user_id,
+                    target_date=target_date
+                ).exclude(status='done').aggregate(
+                    total=Sum('estimated_hours')
+                )['total'] or 0.0
+            
             return Response({
                 'status': 'success',
-                'message': 'Subtarea actualizada exitosamente',
+                'resolved': True,
+                'message': 'Conflicto resuelto' if request.method == 'PATCH' else 'Subtarea actualizada exitosamente',
+                'planned_hours': planned_hours,
+                'limit_hours': limit_hours,
                 'data': serializer.data,
             }, status=status.HTTP_200_OK)
         return Response({

@@ -127,6 +127,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
                 exceeds_by = total_after_save - limit_hours
                 raise OverloadConflictException({
                     'status': 'error',
+                    'resolved': False,
                     'message': f'Quedarías con {total_after_save:g}h planificadas (límite {limit_hours:g}h)',
                     'planned_hours': planned_hours,
                     'limit_hours': limit_hours,
