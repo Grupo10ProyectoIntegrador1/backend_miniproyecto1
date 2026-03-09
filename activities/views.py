@@ -29,7 +29,8 @@ def activity_list_create(request):
         }, status=status.HTTP_200_OK)
 
     # POST
-    serializer = ActivitySerializer(data=request.data)
+    # Request needed to get user_id in the serializer validate context
+    serializer = ActivitySerializer(data=request.data, context={'request': request})
     if serializer.is_valid():
         with transaction.atomic():
             activity = serializer.save(user_id=request.user.user_id)
@@ -38,6 +39,9 @@ def activity_list_create(request):
             'message': 'Actividad creada exitosamente',
             'data': ActivitySerializer(activity).data,
         }, status=status.HTTP_201_CREATED)
+
+    if 'overload_conflict' in serializer.errors:
+        return Response(serializer.errors['overload_conflict'][0], status=status.HTTP_409_CONFLICT)
 
     return Response({
         'status': 'error',
@@ -139,6 +143,9 @@ def subtask_create(request, activity_id):
                 'message': 'No se pudo guardar la subtarea. Ocurrió un error inesperado en el servidor.',
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    if 'overload_conflict' in serializer.errors:
+        return Response(serializer.errors['overload_conflict'][0], status=status.HTTP_409_CONFLICT)
+
     return Response({
         'status': 'error',
         'message': 'Error de validación',
@@ -210,6 +217,10 @@ def subtask_detail(request, pk):
                 'limit_hours': limit_hours,
                 'data': serializer.data,
             }, status=status.HTTP_200_OK)
+
+        if 'overload_conflict' in serializer.errors:
+            return Response(serializer.errors['overload_conflict'][0], status=status.HTTP_409_CONFLICT)
+
         return Response({
             'status': 'error',
             'message': 'Error de validación',
@@ -226,6 +237,7 @@ def subtask_detail(request, pk):
 
 @extend_schema(
     methods=['GET'],
+    responses=TodaySubtaskSerializer(many=True),
     parameters=[
         OpenApiParameter(
             name='course',
