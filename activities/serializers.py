@@ -210,6 +210,29 @@ class ActivitySerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """Validar límites de sub-tareas creadas en lote junto a la actividad."""
+        # --- Protección de Estados de Actividad ---
+        status_val = data.get('status', getattr(self.instance, 'status', 'pending'))
+        due_date = data.get('due_date', getattr(self.instance, 'due_date', None))
+        
+        if self.instance:
+            old_status = self.instance.status
+            # Si era 'overdue' y le asignan nueva fecha a futuro, pasa a 'postponed'
+            if old_status == 'overdue' and status_val == 'overdue' and due_date and due_date >= date.today():
+                data['status'] = 'postponed'
+                status_val = 'postponed'
+            elif status_val != old_status and status_val not in ['done', 'pending', 'postponed']:
+                # El usuario sólo debería poder pasar a 'done' manualmente (o pending)
+                pass
+        else:
+            # Creación nueva: no puede nacer ni done, ni postponed ni overdue
+            if status_val not in ['pending', 'done']:
+                data['status'] = 'pending'
+                status_val = 'pending'
+
+        # Solo correr validacion batch de subtasks si estamos creando (no hay id aún)
+        if self.instance:
+            return data
+
         subtasks_data = data.get('subtasks', [])
         if not subtasks_data:
             return data

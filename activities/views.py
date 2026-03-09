@@ -286,13 +286,13 @@ def today_subtasks(request):
     Subtask.objects.filter(
         activity__user_id=user_id,
         target_date__lt=today,
-        status='pending',
+        status__in=['pending', 'postponed'],
     ).update(status='overdue')
 
     Activity.objects.filter(
         user_id=user_id,
         due_date__lt=today,
-        status='pending',
+        status__in=['pending', 'postponed'],
     ).update(status='overdue')
 
     # Base queryset (ya viene todo actualizado)
