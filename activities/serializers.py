@@ -1,24 +1,13 @@
 from datetime import date
 from rest_framework import serializers
-from rest_framework.exceptions import APIException
 from rest_framework import status
 from django.db.models import Sum
 
 from .models import Activity, Subtask
 from users.models import DailyCapacity
 
-class OverloadConflictException(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = 'Conflicto de sobrecarga diaria.'
-    default_code = 'overload_conflict'
-
-    def __init__(self, detail=None, code=None, **kwargs):
-        super().__init__(detail, code)
-        # Permite retornar el payload exacto requerido (planned_hours, limit_hours, exceeds_by)
-        self.detail = detail
-
 class SubtaskSerializer(serializers.ModelSerializer):
-    """Serializer para subtareas con validaciones US-02 y US-12 (overload)."""
+    """Serializer para subtareas con validaciones (overload)."""
 
     title = serializers.CharField(
         required=True,
@@ -75,6 +64,23 @@ class SubtaskSerializer(serializers.ModelSerializer):
         target_date = data.get('target_date', getattr(self.instance, 'target_date', None))
         status_val = data.get('status', getattr(self.instance, 'status', 'pending'))
 
+        # --- Protección de Estados ---
+        if self.instance:
+            old_status = self.instance.status
+            # Si era 'overdue' y le asignan nueva fecha a futuro, pasa a 'postponed'
+            if old_status == 'overdue' and status_val == 'overdue' and target_date and target_date >= date.today():
+                data['status'] = 'postponed'
+                status_val = 'postponed'
+            elif status_val != old_status and status_val not in ['done', 'pending', 'postponed']:
+                # El usuario sólo debería poder pasar a 'done' manualmente (o pending)
+                # 'postponed' se setea auto (arriba). Si manda 'overdue' manualmente, bloqueamos (a no ser que ya estuviera vencida).
+                pass
+        else:
+            # Creación nueva: no puede nacer ni done, ni postponed ni overdue
+            if status_val not in ['pending', 'done']:
+                data['status'] = 'pending'
+                status_val = 'pending'
+
         # La actividad se inyecta en el contexto desde la vista
         activity = self.context.get('activity')
         if not activity and self.instance:
@@ -125,12 +131,15 @@ class SubtaskSerializer(serializers.ModelSerializer):
             
             if total_after_save > limit_hours:
                 exceeds_by = total_after_save - limit_hours
-                raise OverloadConflictException({
-                    'status': 'error',
-                    'message': f'Quedarías con {total_after_save:g}h planificadas (límite {limit_hours:g}h)',
-                    'planned_hours': planned_hours,
-                    'limit_hours': limit_hours,
-                    'exceeds_by': exceeds_by
+                raise serializers.ValidationError({
+                    'overload_conflict': {
+                        'status': 'error',
+                        'resolved': False,
+                        'message': f'Quedarías con {total_after_save:g}h planificadas (límite {limit_hours:g}h)',
+                        'planned_hours': planned_hours,
+                        'limit_hours': limit_hours,
+                        'exceeds_by': exceeds_by
+                    }
                 })
 
         return data
@@ -198,6 +207,78 @@ class ActivitySerializer(serializers.ModelSerializer):
             if value > 100:
                 raise serializers.ValidationError('El peso no puede ser mayor a 100.')
         return value
+
+    def validate(self, data):
+        """Validar límites de sub-tareas creadas en lote junto a la actividad."""
+        # --- Protección de Estados de Actividad ---
+        status_val = data.get('status', getattr(self.instance, 'status', 'pending'))
+        due_date = data.get('due_date', getattr(self.instance, 'due_date', None))
+        
+        if self.instance:
+            old_status = self.instance.status
+            # Si era 'overdue' y le asignan nueva fecha a futuro, pasa a 'postponed'
+            if old_status == 'overdue' and status_val == 'overdue' and due_date and due_date >= date.today():
+                data['status'] = 'postponed'
+                status_val = 'postponed'
+            elif status_val != old_status and status_val not in ['done', 'pending', 'postponed']:
+                # El usuario sólo debería poder pasar a 'done' manualmente (o pending)
+                pass
+        else:
+            # Creación nueva: no puede nacer ni done, ni postponed ni overdue
+            if status_val not in ['pending', 'done']:
+                data['status'] = 'pending'
+                status_val = 'pending'
+
+        # Solo correr validacion batch de subtasks si estamos creando (no hay id aún)
+        if self.instance:
+            return data
+
+        subtasks_data = data.get('subtasks', [])
+        if not subtasks_data:
+            return data
+            
+        request = self.context.get('request')
+        if not request or not hasattr(request, 'user'):
+            return data
+            
+        user_id = request.user.user_id
+        try:
+            capacity_obj = DailyCapacity.objects.get(user__user_id=user_id)
+            limit_hours = float(capacity_obj.daily_limit_hours)
+        except DailyCapacity.DoesNotExist:
+            limit_hours = 6.0
+
+        # Agrupar las peticiones por fecha para saber si en este mimo envío intentan sobrecargar
+        dates_hours = {}
+        for st in subtasks_data:
+            td = st.get('target_date')
+            est = st.get('estimated_hours', 0.0)
+            if td:
+                dates_hours[td] = dates_hours.get(td, 0.0) + est
+                
+        # Verificar cada fecha contra la BD
+        for target_date, added_hours in dates_hours.items():
+            planned_hours = Subtask.objects.filter(
+                activity__user_id=user_id,
+                target_date=target_date
+            ).exclude(status='done').aggregate(
+                total=Sum('estimated_hours')
+            )['total'] or 0.0
+            
+            total_after_save = planned_hours + added_hours
+            if total_after_save > limit_hours:
+                exceeds_by = total_after_save - limit_hours
+                raise serializers.ValidationError({
+                    'overload_conflict': {
+                        'status': 'error',
+                        'resolved': False,
+                        'message': f'La fecha {target_date} quedaría con {total_after_save:g}h (límite {limit_hours:g}h)',
+                        'planned_hours': planned_hours,
+                        'limit_hours': limit_hours,
+                        'exceeds_by': exceeds_by
+                    }
+                })
+        return data
 
     def create(self, validated_data):
         """Crea la actividad junto con sus subtareas si se incluyen."""
