@@ -132,14 +132,14 @@ class SubtaskSerializer(serializers.ModelSerializer):
             if total_after_save > limit_hours:
                 exceeds_by = total_after_save - limit_hours
                 raise serializers.ValidationError({
-                    'overload_conflict': {
+                    'overload_conflict': [{
                         'status': 'error',
                         'resolved': False,
                         'message': f'Quedarías con {total_after_save:g}h planificadas (límite {limit_hours:g}h)',
                         'planned_hours': planned_hours,
                         'limit_hours': limit_hours,
                         'exceeds_by': exceeds_by
-                    }
+                    }]
                 })
 
         return data
@@ -269,14 +269,14 @@ class ActivitySerializer(serializers.ModelSerializer):
             if total_after_save > limit_hours:
                 exceeds_by = total_after_save - limit_hours
                 raise serializers.ValidationError({
-                    'overload_conflict': {
+                    'overload_conflict': [{
                         'status': 'error',
                         'resolved': False,
                         'message': f'La fecha {target_date} quedaría con {total_after_save:g}h (límite {limit_hours:g}h)',
                         'planned_hours': planned_hours,
                         'limit_hours': limit_hours,
                         'exceeds_by': exceeds_by
-                    }
+                    }]
                 })
         return data
 
