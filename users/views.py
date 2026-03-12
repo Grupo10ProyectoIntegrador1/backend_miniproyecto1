@@ -121,7 +121,8 @@ def daily_capacity_view(request):
         serializer = DailyCapacitySerializer(
             capacity,
             data=request.data,
-            partial=(request.method == 'PATCH')
+            partial=(request.method == 'PATCH'),
+            context={'request': request}
         )
         if serializer.is_valid():
             serializer.save(user=request.user)
