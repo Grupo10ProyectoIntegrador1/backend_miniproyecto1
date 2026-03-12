@@ -77,7 +77,7 @@ class DailyCapacitySerializer(serializers.ModelSerializer):
             for item in overloaded_dates:
                 exceeds_by = float(item['total_hours']) - float(new_limit)
                 
-                # Buscar hasta 3 d\u00edas alternativos para esta fecha con conflicto
+                # Buscar 1 d\u00eda alternativo para esta fecha con conflicto
                 from datetime import timedelta
                 alternative_dates = []
                 # Comenzamos a buscar a partir del d\u00eda siguiente de la fecha en conflicto
@@ -85,7 +85,7 @@ class DailyCapacitySerializer(serializers.ModelSerializer):
                 days_checked = 0
                 max_days_to_check = 30 # \u00daltimo recurso evitar bucles infinitos
                 
-                while len(alternative_dates) < 3 and days_checked < max_days_to_check:
+                while len(alternative_dates) < 1 and days_checked < max_days_to_check:
                     # Aqu\u00ed no tenemos una \u00fanica actividad (sino una suma de varias subtareas ese d\u00eda)
                     # As\u00ed que ignoramos la validaci\u00f3n de due_date de la actividad individual, o el Frontend \n                    # tendr\u00e1 que lidiar con que al moverla le diga que supera el due date de x actividad.
 

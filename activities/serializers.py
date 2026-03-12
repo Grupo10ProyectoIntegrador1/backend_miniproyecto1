@@ -132,14 +132,14 @@ class SubtaskSerializer(serializers.ModelSerializer):
             if total_after_save > limit_hours:
                 exceeds_by = total_after_save - limit_hours
                 
-                # Buscar hasta 3 días alternativos
+                # Buscar 1 día alternativo
                 from datetime import timedelta
                 alternative_dates = []
                 check_date = target_date + timedelta(days=1)
                 days_checked = 0
                 max_days_to_check = 30 # Limitar la búsqueda a 30 días para evitar loops infinitos
                 
-                while len(alternative_dates) < 3 and days_checked < max_days_to_check:
+                while len(alternative_dates) < 1 and days_checked < max_days_to_check:
                     # Verificar si check_date supera el due_date de la actividad
                     if activity and activity.due_date and check_date > activity.due_date:
                         break # No buscar más allá de la fecha de entrega
@@ -298,14 +298,14 @@ class ActivitySerializer(serializers.ModelSerializer):
             if total_after_save > limit_hours:
                 exceeds_by = total_after_save - limit_hours
                 
-                # Buscar hasta 3 días alternativos
+                # Buscar 1 día alternativo
                 from datetime import timedelta
                 alternative_dates = []
                 check_date = target_date + timedelta(days=1)
                 days_checked = 0
                 max_days_to_check = 30
                 
-                while len(alternative_dates) < 3 and days_checked < max_days_to_check:
+                while len(alternative_dates) < 1 and days_checked < max_days_to_check:
                     # Verificar si check_date supera el due_date de la actividad
                     if due_date and check_date > due_date:
                         break # No buscar más allá de la fecha de entrega
