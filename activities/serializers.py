@@ -131,6 +131,33 @@ class SubtaskSerializer(serializers.ModelSerializer):
             
             if total_after_save > limit_hours:
                 exceeds_by = total_after_save - limit_hours
+                
+                # Buscar hasta 3 días alternativos
+                from datetime import timedelta
+                alternative_dates = []
+                check_date = target_date + timedelta(days=1)
+                days_checked = 0
+                max_days_to_check = 30 # Limitar la búsqueda a 30 días para evitar loops infinitos
+                
+                while len(alternative_dates) < 3 and days_checked < max_days_to_check:
+                    # Verificar si check_date supera el due_date de la actividad
+                    if activity and activity.due_date and check_date > activity.due_date:
+                        break # No buscar más allá de la fecha de entrega
+
+                    # Calcular horas planificadas en check_date
+                    day_planned_hours = Subtask.objects.filter(
+                        activity__user_id=user_id,
+                        target_date=check_date
+                    ).exclude(status='done').aggregate(
+                        total=Sum('estimated_hours')
+                    )['total'] or 0.0
+                    
+                    if (day_planned_hours + exceeds_by) <= limit_hours:
+                        alternative_dates.append(str(check_date))
+                        
+                    check_date += timedelta(days=1)
+                    days_checked += 1
+
                 raise serializers.ValidationError({
                     'overload_conflict': [{
                         'status': 'error',
@@ -138,7 +165,9 @@ class SubtaskSerializer(serializers.ModelSerializer):
                         'message': f'Quedarías con {total_after_save:g}h planificadas (límite {limit_hours:g}h)',
                         'planned_hours': planned_hours,
                         'limit_hours': limit_hours,
-                        'exceeds_by': exceeds_by
+                        'exceeds_by': exceeds_by,
+                        'hours_to_reduce': exceeds_by,
+                        'alternative_dates': alternative_dates
                     }]
                 })
 
@@ -268,6 +297,33 @@ class ActivitySerializer(serializers.ModelSerializer):
             total_after_save = planned_hours + added_hours
             if total_after_save > limit_hours:
                 exceeds_by = total_after_save - limit_hours
+                
+                # Buscar hasta 3 días alternativos
+                from datetime import timedelta
+                alternative_dates = []
+                check_date = target_date + timedelta(days=1)
+                days_checked = 0
+                max_days_to_check = 30
+                
+                while len(alternative_dates) < 3 and days_checked < max_days_to_check:
+                    # Verificar si check_date supera el due_date de la actividad
+                    if due_date and check_date > due_date:
+                        break # No buscar más allá de la fecha de entrega
+                    
+                    # Calcular horas planificadas en check_date
+                    day_planned_hours = Subtask.objects.filter(
+                        activity__user_id=user_id,
+                        target_date=check_date
+                    ).exclude(status='done').aggregate(
+                        total=Sum('estimated_hours')
+                    )['total'] or 0.0
+                    
+                    if (day_planned_hours + exceeds_by) <= limit_hours:
+                        alternative_dates.append(str(check_date))
+                        
+                    check_date += timedelta(days=1)
+                    days_checked += 1
+                
                 raise serializers.ValidationError({
                     'overload_conflict': [{
                         'status': 'error',
@@ -275,7 +331,9 @@ class ActivitySerializer(serializers.ModelSerializer):
                         'message': f'La fecha {target_date} quedaría con {total_after_save:g}h (límite {limit_hours:g}h)',
                         'planned_hours': planned_hours,
                         'limit_hours': limit_hours,
-                        'exceeds_by': exceeds_by
+                        'exceeds_by': exceeds_by,
+                        'hours_to_reduce': exceeds_by,
+                        'alternative_dates': alternative_dates
                     }]
                 })
         return data
