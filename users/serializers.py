@@ -1,6 +1,6 @@
 import re
 from rest_framework import serializers
-from .models import User
+from .models import User, DailyCapacity
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -31,4 +31,15 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("El apellido no puede tener más de 50 caracteres.")
         if not re.match(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-']+$", value):
             raise serializers.ValidationError("El apellido solo puede contener letras, espacios, guiones y apóstrofes.")
+        return value
+
+
+class DailyCapacitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyCapacity
+        fields = ['daily_limit_hours']
+
+    def validate_daily_limit_hours(self, value):
+        if value < 1 or value > 16:
+            raise serializers.ValidationError("El límite diario debe estar entre 1 y 16 horas.")
         return value
