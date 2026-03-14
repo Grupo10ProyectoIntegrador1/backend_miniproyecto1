@@ -114,14 +114,17 @@ def daily_capacity_view(request):
         else:
             return Response({
                 'status': 'success',
-                'data': {'daily_limit_hours': 6.0},
+                'data': {
+                    'daily_limit_hours': 6.0
+                },
             }, status=status.HTTP_200_OK)
 
     elif request.method in ['PUT', 'PATCH']:
         serializer = DailyCapacitySerializer(
             capacity,
             data=request.data,
-            partial=(request.method == 'PATCH')
+            partial=(request.method == 'PATCH'),
+            context={'request': request}
         )
         if serializer.is_valid():
             serializer.save(user=request.user)
