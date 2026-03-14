@@ -7,8 +7,8 @@ import jwt
 import os
 from jwt import PyJWKClient
 
-from .models import User
-from .serializers import UserSerializer
+from .models import User, DailyCapacity
+from .serializers import UserSerializer, DailyCapacitySerializer
 from .authentication import SupabaseJWTAuthentication
 
 @extend_schema(methods=['POST'], request=UserSerializer, responses=UserSerializer)
@@ -87,3 +87,55 @@ def profile(request):
         'status': 'success',
         'data': serializer.data,
     }, status=status.HTTP_200_OK)
+
+
+@extend_schema(methods=['GET'], responses=DailyCapacitySerializer)
+@extend_schema(methods=['PUT', 'PATCH'], request=DailyCapacitySerializer, responses=DailyCapacitySerializer)
+@api_view(['GET', 'PUT', 'PATCH'])
+@authentication_classes([SupabaseJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def daily_capacity_view(request):
+    """
+    GET: Obtener límite actual del usuario. Si no existe, devuelve el por defecto (6.0h).
+    PUT/PATCH: Actualiza o guarda un nuevo valor de límite para el usuario.
+    """
+    try:
+        capacity = DailyCapacity.objects.get(user=request.user)
+    except DailyCapacity.DoesNotExist:
+        capacity = None
+
+    if request.method == 'GET':
+        if capacity:
+            serializer = DailyCapacitySerializer(capacity)
+            return Response({
+                'status': 'success',
+                'data': serializer.data,
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'status': 'success',
+                'data': {
+                    'daily_limit_hours': 6.0
+                },
+            }, status=status.HTTP_200_OK)
+
+    elif request.method in ['PUT', 'PATCH']:
+        serializer = DailyCapacitySerializer(
+            capacity,
+            data=request.data,
+            partial=(request.method == 'PATCH'),
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response({
+                'status': 'success',
+                'message': 'Capacidad actualizada',
+                'data': serializer.data,
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            'status': 'error',
+            'message': 'El límite debe estar entre 1 y 16 horas. Intenta de nuevo.',
+            'errors': serializer.errors,
+        }, status=status.HTTP_400_BAD_REQUEST)
