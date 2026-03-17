@@ -239,7 +239,7 @@ class ActivitySerializer(serializers.ModelSerializer):
         # status ya no es read_only, se puede editar
         read_only_fields = ['id', 'user_id', 'progress']
 
-    def get_progress(self, obj):
+    def get_progress(self, obj) -> dict:
         if not obj.pk:
             return {"percentage": 0, "completed": 0, "total": 0}
 
