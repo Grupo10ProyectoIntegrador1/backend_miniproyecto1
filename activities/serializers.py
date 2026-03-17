@@ -197,6 +197,7 @@ class ActivitySerializer(serializers.ModelSerializer):
     Status por defecto: pending.
     """
     subtasks = SubtaskSerializer(many=True, required=False)
+    progress = serializers.SerializerMethodField(read_only=True)
 
     TYPE_LABELS = {
         'exam': 'Examen',
@@ -231,9 +232,29 @@ class ActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Activity
-        fields = '__all__'
+        fields = [
+            'id', 'title', 'type', 'course', 'status', 
+            'due_date', 'weight', 'user_id', 'subtasks', 'progress'
+        ]
         # status ya no es read_only, se puede editar
-        read_only_fields = ['id', 'user_id']
+        read_only_fields = ['id', 'user_id', 'progress']
+
+    def get_progress(self, obj):
+        if not obj.pk:
+            return {"percentage": 0, "completed": 0, "total": 0}
+
+        subtasks = obj.subtasks.all()
+        total_subtasks = len(subtasks)
+        if total_subtasks == 0:
+            return {"percentage": 0, "completed": 0, "total": 0}
+
+        done_subtasks = sum(1 for subtask in subtasks if subtask.status == 'done')
+        
+        return {
+            "percentage": int((done_subtasks / total_subtasks) * 100),
+            "completed": done_subtasks,
+            "total": total_subtasks
+        }
 
     def validate_due_date(self, value):
         """La fecha límite de la actividad debe ser >= hoy."""
