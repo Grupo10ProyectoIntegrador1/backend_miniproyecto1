@@ -32,7 +32,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
         model = Subtask
         fields = [
             'id', 'activity', 'title', 'description', 'status',
-            'target_date', 'estimated_hours',
+            'target_date', 'estimated_hours', 'note', 'done_at',
         ]
         read_only_fields = ['id', 'activity']
 
@@ -80,6 +80,21 @@ class SubtaskSerializer(serializers.ModelSerializer):
             if status_val not in ['pending', 'done']:
                 data['status'] = 'pending'
                 status_val = 'pending'
+
+        from django.utils import timezone
+        
+        if self.instance and self.instance.note:
+            new_note = data.get('note', None)
+            if new_note == '' or new_note is None:
+                data['note'] = self.instance.note
+
+        if status_val == 'done':
+            # Se completará automáticamente el campo `done_at` si no se proporciona
+            if not data.get('done_at') and not getattr(self.instance, 'done_at', None):
+                data['done_at'] = timezone.now()
+        else:
+            # Se borrará el campo `done_at` si el estado ya no es "completado".
+            data['done_at'] = None
 
         # La actividad se inyecta en el contexto desde la vista
         activity = self.context.get('activity')
@@ -381,6 +396,6 @@ class TodaySubtaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subtask
         fields = ['id', 'title', 'description', 'status',
-                  'target_date', 'estimated_hours',
+                  'target_date', 'estimated_hours', 'note', 'done_at',
                   'parent_activity']
         
