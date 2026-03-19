@@ -67,13 +67,15 @@ class SubtaskSerializer(serializers.ModelSerializer):
         # --- Protección de Estados ---
         if self.instance:
             old_status = self.instance.status
-            # Si era 'overdue' y le asignan nueva fecha a futuro, pasa a 'postponed'
-            if old_status == 'overdue' and status_val == 'overdue' and target_date and target_date >= date.today():
-                data['status'] = 'postponed'
-                status_val = 'postponed'
+            old_target_date = self.instance.target_date
+            
+            # Reprogramación automática: Si estaba 'postponed' o 'overdue' y se le asigna una
+            # nueva fecha objetivo diferente a la que tenía, vuelve a estado 'pending'.
+            if old_status in ['postponed', 'overdue'] and target_date and target_date != old_target_date:
+                data['status'] = 'pending'
+                status_val = 'pending'
             elif status_val != old_status and status_val not in ['done', 'pending', 'postponed']:
-                # El usuario sólo debería poder pasar a 'done' manualmente (o pending)
-                # 'postponed' se setea auto (arriba). Si manda 'overdue' manualmente, bloqueamos (a no ser que ya estuviera vencida).
+                # El usuario sólo debería poder pasar a 'done', 'pending' o 'postponed' manualmente
                 pass
         else:
             # Creación nueva: no puede nacer ni done, ni postponed ni overdue
@@ -281,12 +283,14 @@ class ActivitySerializer(serializers.ModelSerializer):
         
         if self.instance:
             old_status = self.instance.status
-            # Si era 'overdue' y le asignan nueva fecha a futuro, pasa a 'postponed'
-            if old_status == 'overdue' and status_val == 'overdue' and due_date and due_date >= date.today():
-                data['status'] = 'postponed'
-                status_val = 'postponed'
+            old_due_date = self.instance.due_date
+            
+            # Reprogramación automática para actividades:
+            if old_status in ['postponed', 'overdue'] and due_date and due_date != old_due_date:
+                data['status'] = 'pending'
+                status_val = 'pending'
             elif status_val != old_status and status_val not in ['done', 'pending', 'postponed']:
-                # El usuario sólo debería poder pasar a 'done' manualmente (o pending)
+                # El usuario sólo debería poder pasar a 'done', 'pending' o 'postponed' manualmente
                 pass
         else:
             # Creación nueva: no puede nacer ni done, ni postponed ni overdue
