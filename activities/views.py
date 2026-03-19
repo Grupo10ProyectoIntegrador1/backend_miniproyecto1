@@ -283,16 +283,17 @@ def today_subtasks(request):
     user_id = request.user.user_id
 
     # Lazy update: marcar como vencidas las subtareas y actividades pasadas
+    # (US-09: Solo las tareas 'pending' deben pasar a 'overdue'. Las 'postponed' no se vencen solas)
     Subtask.objects.filter(
         activity__user_id=user_id,
         target_date__lt=today,
-        status__in=['pending', 'postponed'],
+        status='pending',
     ).update(status='overdue')
 
     Activity.objects.filter(
         user_id=user_id,
         due_date__lt=today,
-        status__in=['pending', 'postponed'],
+        status='pending',
     ).update(status='overdue')
 
     # Base queryset (ya viene todo actualizado)
@@ -306,9 +307,9 @@ def today_subtasks(request):
         qs = qs.filter(activity__course=course)
 
     status_filter = request.query_params.get('status')
-    if status_filter:
+    if status_filter and status_filter.lower() != 'all':
         qs = qs.filter(status=status_filter)
-    else:
+    elif status_filter is None or status_filter == '':
         # Por defecto excluir completadas
         qs = qs.exclude(status='done')
 
