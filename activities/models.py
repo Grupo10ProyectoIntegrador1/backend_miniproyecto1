@@ -61,6 +61,8 @@ class Subtask(models.Model):
     target_date = models.DateField(null=True, blank=True)
     estimated_hours = models.FloatField(null=True, blank=True)
     description = models.TextField(blank=True, default='')
+    note = models.TextField(blank=True, null=True, default='', help_text="Nota opcional al posponer o cambiar estado")
+    done_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
 
     class Meta:

@@ -32,7 +32,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
         model = Subtask
         fields = [
             'id', 'activity', 'title', 'description', 'status',
-            'target_date', 'estimated_hours',
+            'target_date', 'estimated_hours', 'note', 'done_at',
         ]
         read_only_fields = ['id', 'activity']
 
@@ -67,19 +67,36 @@ class SubtaskSerializer(serializers.ModelSerializer):
         # --- Protección de Estados ---
         if self.instance:
             old_status = self.instance.status
-            # Si era 'overdue' y le asignan nueva fecha a futuro, pasa a 'postponed'
-            if old_status == 'overdue' and status_val == 'overdue' and target_date and target_date >= date.today():
-                data['status'] = 'postponed'
-                status_val = 'postponed'
+            old_target_date = self.instance.target_date
+            
+            # Reprogramación automática: Si estaba 'postponed' o 'overdue' y se le asigna una
+            # nueva fecha objetivo diferente a la que tenía, vuelve a estado 'pending'.
+            if old_status in ['postponed', 'overdue'] and target_date and target_date != old_target_date:
+                data['status'] = 'pending'
+                status_val = 'pending'
             elif status_val != old_status and status_val not in ['done', 'pending', 'postponed']:
-                # El usuario sólo debería poder pasar a 'done' manualmente (o pending)
-                # 'postponed' se setea auto (arriba). Si manda 'overdue' manualmente, bloqueamos (a no ser que ya estuviera vencida).
+                # El usuario sólo debería poder pasar a 'done', 'pending' o 'postponed' manualmente
                 pass
         else:
             # Creación nueva: no puede nacer ni done, ni postponed ni overdue
             if status_val not in ['pending', 'done']:
                 data['status'] = 'pending'
                 status_val = 'pending'
+
+        from django.utils import timezone
+        
+        if self.instance and self.instance.note:
+            new_note = data.get('note', None)
+            if new_note == '' or new_note is None:
+                data['note'] = self.instance.note
+
+        if status_val == 'done':
+            # Se completará automáticamente el campo `done_at` si no se proporciona
+            if not data.get('done_at') and not getattr(self.instance, 'done_at', None):
+                data['done_at'] = timezone.now()
+        else:
+            # Se borrará el campo `done_at` si el estado ya no es "completado".
+            data['done_at'] = None
 
         # La actividad se inyecta en el contexto desde la vista
         activity = self.context.get('activity')
@@ -182,6 +199,7 @@ class ActivitySerializer(serializers.ModelSerializer):
     Status por defecto: pending.
     """
     subtasks = SubtaskSerializer(many=True, required=False)
+    progress = serializers.SerializerMethodField(read_only=True)
 
     TYPE_LABELS = {
         'exam': 'Examen',
@@ -216,9 +234,29 @@ class ActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Activity
-        fields = '__all__'
+        fields = [
+            'id', 'title', 'type', 'course', 'status', 
+            'due_date', 'weight', 'user_id', 'subtasks', 'progress'
+        ]
         # status ya no es read_only, se puede editar
-        read_only_fields = ['id', 'user_id']
+        read_only_fields = ['id', 'user_id', 'progress']
+
+    def get_progress(self, obj) -> dict:
+        if not obj.pk:
+            return {"percentage": 0, "completed": 0, "total": 0}
+
+        subtasks = obj.subtasks.all()
+        total_subtasks = len(subtasks)
+        if total_subtasks == 0:
+            return {"percentage": 0, "completed": 0, "total": 0}
+
+        done_subtasks = sum(1 for subtask in subtasks if subtask.status == 'done')
+        
+        return {
+            "percentage": int((done_subtasks / total_subtasks) * 100),
+            "completed": done_subtasks,
+            "total": total_subtasks
+        }
 
     def validate_due_date(self, value):
         """La fecha límite de la actividad debe ser >= hoy."""
@@ -245,12 +283,14 @@ class ActivitySerializer(serializers.ModelSerializer):
         
         if self.instance:
             old_status = self.instance.status
-            # Si era 'overdue' y le asignan nueva fecha a futuro, pasa a 'postponed'
-            if old_status == 'overdue' and status_val == 'overdue' and due_date and due_date >= date.today():
-                data['status'] = 'postponed'
-                status_val = 'postponed'
+            old_due_date = self.instance.due_date
+            
+            # Reprogramación automática para actividades:
+            if old_status in ['postponed', 'overdue'] and due_date and due_date != old_due_date:
+                data['status'] = 'pending'
+                status_val = 'pending'
             elif status_val != old_status and status_val not in ['done', 'pending', 'postponed']:
-                # El usuario sólo debería poder pasar a 'done' manualmente (o pending)
+                # El usuario sólo debería poder pasar a 'done', 'pending' o 'postponed' manualmente
                 pass
         else:
             # Creación nueva: no puede nacer ni done, ni postponed ni overdue
@@ -381,6 +421,6 @@ class TodaySubtaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subtask
         fields = ['id', 'title', 'description', 'status',
-                  'target_date', 'estimated_hours',
+                  'target_date', 'estimated_hours', 'note', 'done_at',
                   'parent_activity']
         
