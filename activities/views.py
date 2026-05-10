@@ -282,16 +282,19 @@ def today_subtasks(request):
     today = date.today()
     user_id = request.user.user_id
 
-    # Lazy update: marcar como vencidas las subtareas y actividades pasadas
-    # (US-09: Solo las tareas 'pending' deben pasar a 'overdue'. Las 'postponed' no se vencen solas)
+    # Obtenemos los IDs de las actividades del usuario
+    user_activity_ids = Activity.objects.filter(user_id=user_id).values_list('id', flat=True)
+    
+    # Hacemos el update usando el IN en lugar de un JOIN directo (activity__user_id),
+    # lo cual es más seguro y compatible con PostgreSQL en producción.
     Subtask.objects.filter(
-        activity__user_id=user_id,
+        activity_id__in=user_activity_ids,
         target_date__lt=today,
         status='pending',
     ).update(status='overdue')
 
     Activity.objects.filter(
-        user_id=user_id,
+        id__in=user_activity_ids,
         due_date__lt=today,
         status='pending',
     ).update(status='overdue')
