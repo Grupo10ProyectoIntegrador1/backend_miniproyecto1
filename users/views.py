@@ -8,7 +8,7 @@ import os
 from jwt import PyJWKClient
 
 from .models import User, DailyCapacity
-from .serializers import UserSerializer, DailyCapacitySerializer
+from .serializers import UserSerializer, DailyCapacitySerializer, StreakSerializer
 from .authentication import SupabaseJWTAuthentication
 
 @extend_schema(methods=['POST'], request=UserSerializer, responses=UserSerializer)

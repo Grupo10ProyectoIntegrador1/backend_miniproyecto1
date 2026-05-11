@@ -30,25 +30,29 @@ class User(models.Model):
         Actualiza la racha del usuario basado en su última actividad.
         - Si completó algo HOY: no cambia nada
         - Si completó algo AYER: incrementa racha
-        - Si pasó más de 1 día: resetea racha a 1
+        - Si streak_last_day es null o pasó más de 1 día: inicia/resetea a 1
         """
         from datetime import date, timedelta
-    
+
         today = date.today()
-    
+
         if self.streak_last_day == today:
+            # Ya completó algo hoy, no cambiar
             return
-    
-        if self.streak_last_day == today - timedelta(days=1):
+
+        if self.streak_last_day is None:
+            # Primera vez que hace algo
+            self.streak_current = 1
+        elif self.streak_last_day == today - timedelta(days=1):
+            # Completó algo ayer, incrementar racha
             self.streak_current += 1
         else:
-            # Pasó más de 1 día o nunca ha hecho nada, resetear a 1
+            # Pasó más de 1 día sin hacer nada, resetear a 1
             self.streak_current = 1
-    
 
         if self.streak_current > self.streak_best:
             self.streak_best = self.streak_current
-    
+
         self.streak_last_day = today
         self.save()
         
