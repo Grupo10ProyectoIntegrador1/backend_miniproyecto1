@@ -8,7 +8,7 @@ import os
 from jwt import PyJWKClient
 
 from .models import User, DailyCapacity
-from .serializers import UserSerializer, DailyCapacitySerializer
+from .serializers import UserSerializer, DailyCapacitySerializer, StreakSerializer
 from .authentication import SupabaseJWTAuthentication
 
 @extend_schema(methods=['POST'], request=UserSerializer, responses=UserSerializer)
@@ -139,3 +139,16 @@ def daily_capacity_view(request):
             'message': 'El límite debe estar entre 1 y 16 horas. Intenta de nuevo.',
             'errors': serializer.errors,
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(methods=['GET'], responses=StreakSerializer)
+@api_view(['GET'])
+@authentication_classes([SupabaseJWTAuthentication])
+@permission_classes([IsAuthenticated])
+def get_user_streak(request):
+    """Obtiene la racha actual del usuario autenticado."""
+    serializer = StreakSerializer(request.user)
+    return Response({
+        'status': 'success',
+        'data': serializer.data,
+    }, status=status.HTTP_200_OK)
